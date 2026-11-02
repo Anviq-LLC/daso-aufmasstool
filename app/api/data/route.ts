@@ -18,6 +18,7 @@ import {defaultCompany} from '@/lib/company';
 import {closureIsCurrent,weekSourceToken} from '@/lib/weeks';
 import {buildPortal,portalUrl} from '@/lib/portal-link';
 import {readPlan} from '@/lib/plan';
+import {env} from 'cloudflare:workers';
 
 function text(v:unknown,max=2000){return String(v??'').trim().slice(0,max);}
 function need(ok:unknown,message:string):asserts ok{if(!ok)throw new Error(message);}
@@ -190,7 +191,7 @@ export async function POST(request:Request){try{
 // ponytail: per-isolate throttle, the sync full-scans records and the plan DB; use a KV/D1 timestamp if isolates multiply
 let lastSync=0;
 async function syncPlanProjects(){
- if(Date.now()-lastSync<120000)return;
+ if(Date.now()-lastSync<Number((env as unknown as {DASO_PLAN_SYNC_SECONDS?:string}).DASO_PLAN_SYNC_SECONDS??120)*1000)return;
  const plan=await readPlan();if(!plan.projects.length)return;lastSync=Date.now();
  const rows=await db().prepare("SELECT id,kind,data FROM records WHERE kind IN ('project','plandeleted')").all<{id:string;kind:string;data:string}>();
  const existing=rows.results.filter(r=>r.kind==='project').map(r=>JSON.parse(r.data) as Project),removed=new Set(rows.results.filter(r=>r.kind==='plandeleted').map(r=>r.id.slice(8)));
