@@ -37,7 +37,7 @@ function crossSiteWrite(request:Request){
 // Users and roles are managed in Montageplanung. A user listed there as Monteur has no access here.
 async function planUser(email:string):Promise<{role:Identity['role'];name:string}|'none'|null>{
  const plan=(env as unknown as {PLAN_DB?:D1Database}).PLAN_DB;if(!plan)return null;
- const row=await plan.prepare('SELECT name,access_role FROM users WHERE lower(email) = ?').bind(email).first<{name:string;access_role:string}>();
+ const row=await plan.prepare('SELECT name,access_role FROM users WHERE email = ?').bind(email).first<{name:string;access_role:string}>();
  if(!row)return null;
  const role=({planer:'Planer',obermonteur:'Obermonteur'} as Record<string,Identity['role']>)[row.access_role];
  return role?{role,name:row.name}:'none';

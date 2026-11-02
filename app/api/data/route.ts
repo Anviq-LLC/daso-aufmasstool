@@ -187,7 +187,10 @@ export async function POST(request:Request){try{
  }catch(e){return Response.json({error:e instanceof Error?e.message:'Speichern fehlgeschlagen.'},{status:400});}}
 
 // Every active Montageplanung project appears here on its own. A project a Planer deleted stays away.
+// ponytail: per-isolate throttle, the sync full-scans records and the plan DB; use a KV/D1 timestamp if isolates multiply
+let lastSync=0;
 async function syncPlanProjects(){
+ if(Date.now()-lastSync<120000)return;lastSync=Date.now();
  const plan=await readPlan();if(!plan.projects.length)return;
  const rows=await db().prepare("SELECT id,kind,data FROM records WHERE kind IN ('project','plandeleted')").all<{id:string;kind:string;data:string}>();
  const existing=rows.results.filter(r=>r.kind==='project').map(r=>JSON.parse(r.data) as Project),removed=new Set(rows.results.filter(r=>r.kind==='plandeleted').map(r=>r.id.slice(8)));
