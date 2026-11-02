@@ -190,8 +190,8 @@ export async function POST(request:Request){try{
 // ponytail: per-isolate throttle, the sync full-scans records and the plan DB; use a KV/D1 timestamp if isolates multiply
 let lastSync=0;
 async function syncPlanProjects(){
- if(Date.now()-lastSync<120000)return;lastSync=Date.now();
- const plan=await readPlan();if(!plan.projects.length)return;
+ if(Date.now()-lastSync<120000)return;
+ const plan=await readPlan();if(!plan.projects.length)return;lastSync=Date.now();
  const rows=await db().prepare("SELECT id,kind,data FROM records WHERE kind IN ('project','plandeleted')").all<{id:string;kind:string;data:string}>();
  const existing=rows.results.filter(r=>r.kind==='project').map(r=>JSON.parse(r.data) as Project),removed=new Set(rows.results.filter(r=>r.kind==='plandeleted').map(r=>r.id.slice(8)));
  const repaired=await db().prepare("SELECT 1 AS n FROM records WHERE id = 'migration:plan-email-1'").first();
