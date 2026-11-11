@@ -54,6 +54,15 @@ try{
  await call('importLV',{positions:[{number:'1.1',description:'Neue Bezeichnung',unit:'m',price:9999}]});s=await state();assert.equal(s.reports[0].lines[0].price,2383,'historical price persists');
  const attachment=await upload('Test.txt','Originalanlage','attachment',id,'text/plain');assert.equal(attachment.size,14);
  await call('finalizeReport',{id});await call('saveReport',{report},400);
+ {const plan=await mf.getD1Database('PLAN_DB');for(const [u,r] of [['book','buchhaltung'],['obm','obermonteur']])await plan.prepare('INSERT INTO users (id,email,name,access_role) VALUES (?,?,?,?)').bind(u,u+'@example.invalid',u,r).run();
+  const post=async(user,body)=>mf.dispatchFetch('http://test/api/data',{method:'POST',headers:{'content-type':'application/json',...await as(user+'@example.invalid')},body:JSON.stringify({projectId,...body})});
+  assert.equal((await post('obm',{action:'setStage',id,stage:'paid'})).status,400,'Obermonteur cannot set stage');
+  assert.equal((await post('book',{action:'setStage',id,stage:'bogus'})).status,400);
+  assert.equal((await post('book',{action:'setStage',id,stage:'paid'})).status,200,'Buchhaltung sets stage');
+  assert.equal((await state()).reports.find(r=>r.id===id).stage,'paid');
+  assert.equal((await post('book',{action:'finalizeReport',id})).status,400,'Buchhaltung is read-only otherwise');
+  assert.equal((await mf.dispatchFetch('http://test/api/data',{headers:await as('book@example.invalid')})).status,200,'Buchhaltung can read');
+  await call('setStage',{id,stage:'created'});}
  s=await state();report=s.reports.find(r=>r.id===id);
  const file=await upload('Paket.pdf','%PDF-placeholder','package');
  await call('preparePackage',{week:'2026-W40',area:'OG',reportIds:[id],fileId:file.id,to:'kunde@example.invalid',versions:{[id]:report.updatedAt}});

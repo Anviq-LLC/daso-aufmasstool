@@ -1,6 +1,6 @@
 import {env} from 'cloudflare:workers';
 import {db} from '@/db/raw';
-export type Identity={id:string;email:string;role:'Planer'|'Obermonteur';name:string};
+export type Identity={id:string;email:string;role:'Planer'|'Obermonteur'|'Buchhaltung';name:string};
 type Jwk=JsonWebKey&{kid:string};
 type Settings=Record<string,string|undefined>;
 const b64=(s:string)=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
@@ -39,7 +39,7 @@ async function planUser(email:string):Promise<{role:Identity['role'];name:string
  const plan=(env as unknown as {PLAN_DB?:D1Database}).PLAN_DB;if(!plan)return null;
  const row=await plan.prepare('SELECT name,access_role FROM users WHERE email = ?').bind(email).first<{name:string;access_role:string}>();
  if(!row)return null;
- const role=({planer:'Planer',obermonteur:'Obermonteur'} as Record<string,Identity['role']>)[row.access_role];
+ const role=({planer:'Planer',obermonteur:'Obermonteur',buchhaltung:'Buchhaltung'} as Record<string,Identity['role']>)[row.access_role];
  return role?{role,name:row.name}:'none';
 }
 export async function identity(request:Request):Promise<Identity>{
@@ -56,5 +56,6 @@ export async function identity(request:Request):Promise<Identity>{
  if(!access||!['Planer','Obermonteur'].includes(access.role)||access.disabled)throw Error('Zugriff ist nur für freigeschaltete Obermonteure und Planer möglich.');
  return{id:email,email,role:access.role,name:access.name||email};
 }
-export async function actor(request:Request){const user=await identity(request);return user.email||user.name;}
+export async function actor(request:Request,writeOk=false){const user=await identity(request);if(user.role==='Buchhaltung'&&request.method!=='GET'&&!writeOk)throw Error('Buchhaltung darf nur lesen und den Status setzen.');return user.email||user.name;}
+export async function office(request:Request){const user=await identity(request);if(user.role==='Obermonteur')throw Error('Den Status dürfen nur Planer und Buchhaltung ändern.');return user;}
 export async function planner(request:Request){const user=await identity(request);if(user.role!=='Planer')throw Error('Diese Einstellung darf nur ein Planer ändern.');return user;}
