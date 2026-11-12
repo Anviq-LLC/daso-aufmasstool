@@ -1,13 +1,8 @@
-import * as inbox from '../app/api/inbox/route';
-import * as inboxRun from '../app/api/inbox/run/route';
-import * as contractors from '../app/api/contractors/route';
 import * as company from '../app/api/company/route';
 import * as data from '../app/api/data/route';
 import * as files from '../app/api/files/route';
-import * as settings from '../app/api/settings/route';
-import * as mail from '../app/api/mail/route';
-import * as installer from '../app/api/settings/installer/route';
-import * as portal from '../app/api/portal/route';
 import * as plan from '../app/api/plan/route';
 import * as me from '../app/api/me/route';
-export default {fetch(request:Request){const path=new URL(request.url).pathname;const routes=path==='/api/inbox/run'?inboxRun:path==='/api/inbox'?inbox:path==='/api/contractors'?contractors:path==='/api/company'?company:path==='/api/files'?files:path==='/api/settings/installer'?installer:path==='/api/settings'?settings:path==='/api/mail'?mail:path==='/api/portal'?portal:path==='/api/plan'?plan:path==='/api/me'?me:data;const handler=(routes as Record<string,(r:Request)=>Response|Promise<Response>>)[request.method];return handler?handler(request):new Response('Not found',{status:404});}};
+import * as contractors from '../app/api/contractors/route';
+const routes:Record<string,object>={'/api/company':company,'/api/files':files,'/api/plan':plan,'/api/me':me,'/api/contractors':contractors};
+export default {fetch(request:Request){const handler=((routes[new URL(request.url).pathname]||data) as Record<string,(r:Request)=>Response|Promise<Response>>)[request.method];return handler?handler(request):new Response('Not found',{status:404});}};

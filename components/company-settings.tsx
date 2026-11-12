@@ -1,10 +1,8 @@
 'use client';
 import {useState,useEffect} from 'react';
-import {Building2,Mail,Save} from 'lucide-react';
-import {Tabs,TabsList,TabsTrigger,TabsContent} from './ui/tabs';
+import {Mail,Save} from 'lucide-react';
 import {Button} from './ui/button';
 import {Input} from './ui/input';
-import {SettingsPanel} from './settings-panel';
 import {defaultCompany} from '@/lib/company';
 import type {CompanyProfile} from '@/lib/types';
 const sections:[string,[keyof CompanyProfile,string][]][]=[['Firma & Anschrift',[['name','Firmenname *'],['street','Straße und Hausnummer'],['postalCode','Postleitzahl'],['city','Ort'],['country','Land'],['phone','Telefon'],['email','Firmen-E-Mail'],['website','Website']]],['Steuer- & Registerangaben',[['taxNumber','Steuernummer'],['vatId','Umsatzsteuer-Identifikationsnummer'],['managingDirector','Geschäftsführung / Inhaber'],['registerCourt','Registergericht'],['registerNumber','Registernummer']]],['Bankverbindung',[['bankName','Bank'],['iban','IBAN'],['bic','BIC']]]];
@@ -13,4 +11,4 @@ function CompanyPanel({onSaved}:{onSaved:()=>Promise<void>}){const[company,setCo
  async function save(){setBusy(true);setError('');setNotice('');try{const r=await fetch('/api/company',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company})}),j=await r.json() as {company:CompanyProfile;error?:string};if(!r.ok)throw Error(j.error);setCompany(j.company);await onSaved();setNotice('Firmenangaben gespeichert. Neue Kundenunterlagen verwenden diese Angaben.');}catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}finally{setBusy(false);}}
  return <div className="stack">{!loading&&!editable&&<div className="info-note">Änderungen sind für Planer freigegeben.</div>}<CompanyForm value={company} editable={editable&&!loading} busy={busy} onChange={(key,value)=>{setCompany(prev=>({...prev,[key]:value}));setNotice('');}}/>{error&&<div className="message error" role="alert">{error}</div>}{notice&&<div className="message success" role="status">{notice}</div>}{editable&&<div className="actions"><Button disabled={busy||!company.name.trim()} onClick={save}><Save/>Firmenangaben speichern</Button></div>}</div>;
 }
-export function CompanySettings({onSaved}:{onSaved:()=>Promise<void>}){return <Tabs defaultValue="company"><TabsList className="people-tabs"><TabsTrigger value="company"><Building2 size={16}/>Firmenangaben</TabsTrigger><TabsTrigger value="email"><Mail size={16}/>E-Mail</TabsTrigger></TabsList><TabsContent value="company"><CompanyPanel onSaved={onSaved}/></TabsContent><TabsContent value="email"><SettingsPanel/></TabsContent></Tabs>;}
+export function CompanySettings({onSaved}:{onSaved:()=>Promise<void>}){return <CompanyPanel onSaved={onSaved}/>;}

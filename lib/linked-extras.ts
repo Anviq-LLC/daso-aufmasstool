@@ -19,7 +19,7 @@ export function bundleIssue(selected:Report[],reports:Report[]):string{
 export function bundleFileName(project:Project,report:Report,reports:Report[]){const bundle=reportBundle(report,reports);return reportFileName(project,bundle.length===1?report:{...report,crews:bundle.flatMap(reportCrews)});}
 export function linkedExtraDraft(parent:Report,project:Project):Report{
  if(!parent.id||reportKind(parent)!=='measurement')throw Error('Bitte zuerst das Aufmaß speichern.');
- const report:Report={...structuredClone(parent),id:'',clientDraftId:randomId(),parentReportId:parent.id,kind:'extra',revenueAllocation:undefined,lines:[],note:'Mehraufwand zum Aufmaß vom '+dateLabel(parent.date),state:'draft',review:'pending',reviewNote:'',createdAt:'',updatedAt:'',sentAt:null,deadline:null,timeSheet:{mode:parent.endDate!==parent.date?'week':'day',anchorDate:parent.date,factor:project.factor,entries:[]}};
+ const report:Report={...structuredClone(parent),id:'',clientDraftId:randomId(),parentReportId:parent.id,kind:'extra',revenueAllocation:undefined,lines:[],note:'Mehraufwand zum Aufmaß vom '+dateLabel(parent.date),state:'draft',createdAt:'',updatedAt:'',timeSheet:{mode:parent.endDate!==parent.date?'week':'day',anchorDate:parent.date,factor:project.factor,entries:[]}};
  report.timeSheet!.entries=timeWorkers(report).map(worker=>({...newTimeEntry(project,report,parent.date,worker),allowanceQuantity:0}));
  return report;
 }

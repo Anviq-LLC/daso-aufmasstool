@@ -1,6 +1,0 @@
-import type {MailPackage,Report,StoredFile} from './types';
-export function returnBelongsToReport(file:StoredFile,report:Report){return file.kind==='signed'&&file.projectId===report.projectId&&(file.reportId===report.id||!!file.packageId&&!!file.reportIds?.includes(report.id));}
-export function packageReturnFiles(files:StoredFile[],pack:MailPackage){return files.filter(f=>f.kind==='signed'&&f.packageId===pack.id&&f.projectId===pack.projectId);}
-export function packageReportReviewed(pack:MailPackage,report:Report){const check=pack.returnReviews?.[report.id];return !!check&&check.reportVersion===report.updatedAt&&report.review==='approved';}
-export function packageReturnStatus(pack:MailPackage,reports:Report[]){const current=pack.reportIds.map(id=>reports.find(r=>r.id===id)),approved=current.filter(r=>r&&packageReportReviewed(pack,r)).length;return{approved,total:pack.reportIds.length,complete:approved===pack.reportIds.length&&approved>0,stale:current.some(r=>r&&pack.returnReviews?.[r.id]&&!packageReportReviewed(pack,r))};}
-export function recordPackageReview(pack:MailPackage,report:Report,fileId:string,at:string,user:string):MailPackage{return{...pack,returnReviews:{...pack.returnReviews,[report.id]:{fileId,reportVersion:report.updatedAt,at,user}}};}

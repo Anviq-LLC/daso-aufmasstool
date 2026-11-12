@@ -56,6 +56,5 @@ export async function identity(request:Request):Promise<Identity>{
  if(!access||!['Planer','Obermonteur'].includes(access.role)||access.disabled)throw Error('Zugriff ist nur für freigeschaltete Obermonteure und Planer möglich.');
  return{id:email,email,role:access.role,name:access.name||email};
 }
-export async function actor(request:Request,writeOk=false){const user=await identity(request);if(user.role==='Buchhaltung'&&request.method!=='GET'&&!writeOk)throw Error('Buchhaltung darf nur lesen und den Status setzen.');return user.email||user.name;}
-export async function office(request:Request){const user=await identity(request);if(user.role==='Obermonteur')throw Error('Den Status dürfen nur Planer und Buchhaltung ändern.');return user;}
+export async function actor(request:Request){const user=await identity(request);if(user.role==='Buchhaltung'&&request.method!=='GET')throw Error('Buchhaltung darf nur lesen.');return user.email||user.name;}
 export async function planner(request:Request){const user=await identity(request);if(user.role!=='Planer')throw Error('Diese Einstellung darf nur ein Planer ändern.');return user;}

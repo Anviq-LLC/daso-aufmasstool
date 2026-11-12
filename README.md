@@ -1,17 +1,16 @@
 # DaSo Aufmaßtool
 
 Quantity surveys (Aufmaß), extra-effort and timesheet reports for DaSo Lüftungsbau:
-bill-of-quantities import, customer PDF packages, customer return review, weekly
-closing and invoice preparation. Access is restricted to DaSo staff through
-Cloudflare Access.
+bill-of-quantities import, daily reports with PDF export, and an evaluation by
+project, employee or subcontractor. A saved report is finished and stays editable.
+Access is restricted to DaSo staff through Cloudflare Access.
 
 ## Stack
 
 - Next.js on [vinext](https://github.com/cloudflare/vinext), deployed as a Cloudflare Worker
-- Cloudflare D1 for records, Cloudflare R2 for files and outgoing mail
+- Cloudflare D1 for records, Cloudflare R2 for files
 - Cloudflare Access for sign-in. The Worker verifies the signed Access token on
-  every request; roles (Planer / Obermonteur) are checked server-side in `lib/auth.ts`
-- PHP mail relay (`mail-relay/relay.php`) for SMTP/IMAP over HTTPS
+  every request; roles (Planer / Obermonteur / Buchhaltung) are checked server-side in `lib/auth.ts`
 
 ## Local development
 
@@ -38,11 +37,8 @@ Worker secrets (`wrangler secret put <name> --name daso-aufmasstool`):
 | `CF_ACCESS_TEAM_DOMAIN` | Zero Trust team domain, e.g. `team.cloudflareaccess.com` |
 | `CF_ACCESS_AUD` | Audience tag of the Cloudflare Access application |
 | `DASO_OWNER_EMAIL` | Email that is always a Planer |
-| `DASO_SETTINGS_KEY` | Base64 32-byte key for the encrypted mailbox settings |
-| `DASO_CRON_SECRET` | Bearer token for `POST /api/inbox/run` from a scheduler |
-| `DASO_INBOX_SERVICE_ENABLED` | `1` allows the inbox sync endpoint |
 
-Roles come from the Montageplanung users table. `access:<email>` records in `records` (Planer or Obermonteur) cover people who are not listed there, and `DASO_OWNER_EMAIL` is always a Planer.
+Roles come from the Montageplanung users table. Buchhaltung can read everything but cannot change data. `access:<email>` records in `records` (Planer or Obermonteur) cover people who are not listed there, and `DASO_OWNER_EMAIL` is always a Planer.
 
 ## Build and deploy
 
@@ -55,23 +51,14 @@ no framework detection happens. The build writes `dist/server/wrangler.json`,
 which the Vite plugin derives from `wrangler.jsonc`.
 `.github/workflows/ci.yml` runs type-check and tests on every push.
 
-## Customer link
+## Old customer links
 
-Every package sent from the tool gets a link of the form `/p/<token>` in the mail.
-The customer checks the quantities, enters corrections and submits once. The
-submission creates a PDF without form fields (with the correction as an embedded
-JSON attachment) and waits for an Obermonteur or Planer to apply or reject it in
-the Versand tab. Tokens are random, only their SHA-256 is stored, and links expire
-after 60 days.
-
-These paths must be reachable without Cloudflare Access, as a second Access
-application with a Bypass policy: `/p/*`, `/api/portal`, `/_next/*`,
-`/daso-logo.png` and `/favicon.svg`. Everything else stays behind Access.
+Links of the form `/p/<token>` from earlier mails show a page saying that the link is no longer active.
 
 ## Montageplanung
 
 The Worker has a second D1 binding, `PLAN_DB`, to the Montageplanung database. It is
-only read: user roles (`planer`, `obermonteur`, `monteur`) decide access here, and
+only read: user roles (`planer`, `obermonteur`, `buchhaltung`; `monteur` has no access) decide access here, and
 planned projects with customer contacts can be copied into a new project.
 
 ## Database migrations
