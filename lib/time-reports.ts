@@ -34,6 +34,7 @@ export function workMinutes(entry:Pick<TimeEntry,'start'|'end'|'pauseMinutes'>):
  if(start===null||end===null||end<=start||!Number.isSafeInteger(entry.pauseMinutes)||entry.pauseMinutes<0||entry.pauseMinutes>=end-start)return null;
  return end-start-entry.pauseMinutes;
 }
+export function billedMinutes(entry:Pick<TimeEntry,'start'|'end'|'pauseMinutes'|'interruptionMinutes'>):number|null{const work=workMinutes(entry),cut=entry.interruptionMinutes||0;return work===null||cut>work?null:work-cut;}
 export type TimeWorker={id:string;name:string;code:string;trial:boolean;contractorRate:number|null|undefined};
 export function timeWorkers(report:Report):TimeWorker[]{
  if(report.crews?.length)return reportCrews(report).flatMap(crew=>timeWorkers({...report,crews:undefined,team:crew.team,teamWork:crew.teamWork,employeeMembers:crew.employeeMembers}));
@@ -59,12 +60,12 @@ export function editTimeEntry(entry:TimeEntry,patch:Partial<TimeEntry>,project:P
  return next;
 }
 
-export function copyTimeEntry(source:TimeEntry,target:TimeEntry,project:Project,worker:TimeWorker):TimeEntry{return editTimeEntry(target,{role:source.role,start:source.start,end:source.end,pauseMinutes:source.pauseMinutes,task:source.task,allowanceQuantity:allowanceCount(source),travelQuantity:0,overnightQuantity:0},project,worker);}
+export function copyTimeEntry(source:TimeEntry,target:TimeEntry,project:Project,worker:TimeWorker):TimeEntry{return editTimeEntry(target,{role:source.role,start:source.start,end:source.end,pauseMinutes:source.pauseMinutes,interruptionMinutes:0,interruptionNote:'',task:source.task,allowanceQuantity:allowanceCount(source),travelQuantity:0,overnightQuantity:0},project,worker);}
 export function newTimeEntry(project:Project,report:Report,date:string,worker:TimeWorker):TimeEntry{return{id:randomId(),date,workerId:worker.id,name:worker.name,code:worker.code,role:'fitter',start:'',end:'',pauseMinutes:0,task:'',allowanceQuantity:report.parentReportId?0:1,travelQuantity:0,overnightQuantity:0,rates:entryRates(project,worker,'fitter')};}
 export function timeReadiness(report:Report):string[]{
  const entries=report.timeSheet?.entries||[],issues:string[]=[];
  if(!entries.length)issues.push('Bitte mindestens einen Arbeitstag mit Mitarbeiter erfassen.');
- for(const e of entries){const who=`${weekdayShort(e.date)} ${e.code}`;if(workMinutes(e)===null)issues.push(`${who}: Anfang, Ende und Pause prüfen.`);if(!e.task.trim())issues.push(`${who}: ausgeführte Arbeiten fehlen.`);if(!report.parentReportId&&timeWorkers(report).find(w=>w.id===e.workerId)?.contractorRate!==undefined&&e.rates?.costHourly==null)issues.push(`${who}: Nachunternehmerkostensatz im Team fehlt.`);if(e.rates?.billingHourly==null)issues.push(`${who}: Projektstundenverrechnungssatz für ${roleLabel(e.role)} fehlt.`);if(e.allowanceQuantity!==undefined){if(e.allowanceQuantity>0&&e.rates?.allowanceBilling==null)issues.push(`${who}: ${allowanceLabel} für die Abrechnung im Projekt fehlt.`);}else{if(e.travelQuantity>0&&e.rates?.travelBilling==null||e.overnightQuantity>0&&e.rates?.overnightBilling==null)issues.push(`${who}: gespeicherter Pauschalensatz im Projekt fehlt.`);}}
+ for(const e of entries){const who=`${weekdayShort(e.date)} ${e.code}`;if(workMinutes(e)===null)issues.push(`${who}: Anfang, Ende und Pause prüfen.`);else if(billedMinutes(e)===null)issues.push(`${who}: Unterbrechung ist länger als die Arbeitszeit.`);else if(e.interruptionMinutes&&!e.interruptionNote?.trim())issues.push(`${who}: Notiz zur Unterbrechung fehlt.`);if(!e.task.trim())issues.push(`${who}: ausgeführte Arbeiten fehlen.`);if(!report.parentReportId&&timeWorkers(report).find(w=>w.id===e.workerId)?.contractorRate!==undefined&&e.rates?.costHourly==null)issues.push(`${who}: Nachunternehmerkostensatz im Team fehlt.`);if(e.rates?.billingHourly==null)issues.push(`${who}: Projektstundenverrechnungssatz für ${roleLabel(e.role)} fehlt.`);if(e.allowanceQuantity!==undefined){if(e.allowanceQuantity>0&&e.rates?.allowanceBilling==null)issues.push(`${who}: ${allowanceLabel} für die Abrechnung im Projekt fehlt.`);}else{if(e.travelQuantity>0&&e.rates?.travelBilling==null||e.overnightQuantity>0&&e.rates?.overnightBilling==null)issues.push(`${who}: gespeicherter Pauschalensatz im Projekt fehlt.`);}}
  return [...new Set(issues)];
 }
 export function timePricingComplete(report:Report){return !isTimeReport(report)||!!report.timeSheet?.entries.length&&report.timeSheet.entries.every(e=>workMinutes(e)!==null&&e.rates?.billingHourly!=null&&(e.allowanceQuantity!==undefined?(!e.allowanceQuantity||e.rates?.allowanceBilling!=null):(!e.travelQuantity||e.rates?.travelBilling!=null)&&(!e.overnightQuantity||e.rates?.overnightBilling!=null)));}
@@ -75,7 +76,7 @@ export function canonicalTimeSheet(project:Project,report:Report,old?:Report):Ti
  const anchorDate=calendarDate(input.anchorDate),allowed=new Set(timeDates(anchorDate,input.mode)),workers=timeWorkers(report),seen=new Set<string>(),ids=new Set<string>(),prior=old?.timeSheet;
  const entries=input.entries.map(e=>{const date=calendarDate(e.date);if(!allowed.has(date))throw Error('Arbeitstag gehört nicht zum gewählten Berichtszeitraum.');const worker=workers.find(w=>w.id===e.workerId);if(!worker)throw Error('Bitte die Besetzung für den Arbeitstag neu auswählen.');const identity=date+'|'+worker.id;if(seen.has(identity))throw Error('Ein Mitarbeiter darf pro Tag nur einmal eingetragen werden.');seen.add(identity);
   if(!['foreman','fitter'].includes(e.role))throw Error('Bitte Monteur oder Obermonteur auswählen.');
-  for(const value of [e.pauseMinutes,...(e.allowanceQuantity!==undefined?[e.allowanceQuantity]:[e.travelQuantity,e.overnightQuantity])])if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0||value>1440)throw Error('Pause und Pauschalenanzahl müssen gültige ganze Zahlen sein.');
+  for(const value of [e.pauseMinutes,e.interruptionMinutes??0,...(e.allowanceQuantity!==undefined?[e.allowanceQuantity]:[e.travelQuantity,e.overnightQuantity])])if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0||value>1440)throw Error('Pause und Pauschalenanzahl müssen gültige ganze Zahlen sein.');
   for(const value of [e.start,e.end])if(typeof value!=='string'||value&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw Error('Ungültige Uhrzeit.');
   const before=prior?.entries.find(p=>p.id===e.id&&p.workerId===worker.id),id=before?.id||randomId();if(ids.has(id))throw Error('Stundenzeile wurde doppelt eingetragen.');ids.add(id);
   const rates=before?.role===e.role&&before.rates?{...before.rates}:entryRates(project,worker,e.role);
@@ -86,15 +87,15 @@ export function canonicalTimeSheet(project:Project,report:Report,old?:Report):Ti
   rates.billingHourly=current.billingHourly;if(e.allowanceQuantity!==undefined){rates.allowanceBilling=current.allowanceBilling;rates.allowanceCost=0;}
   if(worker.contractorRate===undefined){rates.costHourly=null;rates.allowanceCost=0;rates.travelCost=0;rates.overnightCost=0;}
   if(before?.allowanceQuantity!==undefined&&e.allowanceQuantity===undefined)throw Error('Dieser Eintrag verwendet die gemeinsame Pauschale. Bitte das Formular neu laden.');
-  return{id,date,workerId:worker.id,name:worker.name,code:worker.code,role:e.role,start:e.start,end:e.end,pauseMinutes:e.pauseMinutes,task:String(e.task||'').trim().slice(0,6000),...(e.allowanceQuantity!==undefined?{allowanceQuantity:e.allowanceQuantity,travelQuantity:0,overnightQuantity:0}:{travelQuantity:e.travelQuantity,overnightQuantity:e.overnightQuantity}),rates};
+  return{id,date,workerId:worker.id,name:worker.name,code:worker.code,role:e.role,start:e.start,end:e.end,pauseMinutes:e.pauseMinutes,...(e.interruptionMinutes?{interruptionMinutes:e.interruptionMinutes,interruptionNote:String(e.interruptionNote||'').trim().slice(0,500)}:{}),task:String(e.task||'').trim().slice(0,6000),...(e.allowanceQuantity!==undefined?{allowanceQuantity:e.allowanceQuantity,travelQuantity:0,overnightQuantity:0}:{travelQuantity:e.travelQuantity,overnightQuantity:e.overnightQuantity}),rates};
  }).sort((a,b)=>a.date.localeCompare(b.date)||a.code.localeCompare(b.code,'de'));
  return{mode:input.mode,anchorDate,factor:prior?.factor??project.factor,entries};
 }
 export function timeLines(report:Report):Line[]{
  if(!isTimeReport(report)||!report.timeSheet)return report.lines;
  const kind=reportKind(report),prefix=kind==='extra'?'MW':'SZ',factor=report.timeSheet.factor;
- return report.timeSheet.entries.flatMap(e=>{const role=e.role==='foreman'?'OM':'M',base={positionId:`service:${kind}:${e.role}`,description:`${reportLabel(report)} · ${roleLabel(e.role)}`,employeeFactor:factor,remark:`${e.code} · ${e.task}`,serviceDate:e.date,workerId:e.workerId},minutes=workMinutes(e),rows:Line[]=[];
-  if(minutes!==null){const price=e.rates?.billingHourly??0;rows.push({...base,id:e.id+':h',number:prefix+'-'+role,unit:'Std',price,employeePrice:Math.round(price*factor),quantity:minutes/60,exactMinutes:minutes});}
+ return report.timeSheet.entries.flatMap(e=>{const role=e.role==='foreman'?'OM':'M',base={positionId:`service:${kind}:${e.role}`,description:`${reportLabel(report)} · ${roleLabel(e.role)}`,employeeFactor:factor,remark:`${e.code} · ${e.task}`,serviceDate:e.date,workerId:e.workerId},minutes=billedMinutes(e),rows:Line[]=[];
+  if(minutes){const price=e.rates?.billingHourly??0;rows.push({...base,id:e.id+':h',number:prefix+'-'+role,unit:'Std',price,employeePrice:Math.round(price*factor),quantity:minutes/60,exactMinutes:minutes});}
   const fees=e.allowanceQuantity!==undefined?[['p',e.allowanceQuantity,e.rates?.allowanceBilling??0,allowanceLabel] as const]:[['a',e.travelQuantity,e.rates?.travelBilling??0,'Anfahrt'] as const,['u',e.overnightQuantity,e.rates?.overnightBilling??0,'Übernachtung'] as const];
   for(const [type,quantity,price,label] of fees)if(quantity)rows.push({...base,id:e.id+':'+type,positionId:base.positionId+':'+type,number:prefix+'-'+role+'-'+type.toUpperCase(),description:`${reportLabel(report)} · ${label} · ${roleLabel(e.role)}`,unit:'St',price,employeePrice:Math.round(price*factor),quantity});
   return rows;
