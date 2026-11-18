@@ -1,7 +1,8 @@
 import {db,bucket,readData,commit,createProject,readEmployeeDirectory} from '@/db/raw';
 import {actor,planner} from '@/lib/auth';
 import {weekOf,weekStart,defaultTemplate} from '@/lib/business';
-import type {Project,ProjectTeam,ProjectEmployee,EmployeeDirectory,Position,Report,Line} from '@/lib/types';
+import {teamMembers} from '@/lib/team-members';
+import type {TeamMember,Project,ProjectTeam,ProjectEmployee,EmployeeDirectory,Position,Report,Line} from '@/lib/types';
 import {assignEmployeeCodes,TRIAL_EMPLOYEE_ID,findEmployee} from '@/lib/employees';
 import {addDirectoryEmployees} from '@/lib/employee-directory';
 import {remarkAdjustment,adjustedPrice,adjustmentMissing,percentRemark} from '@/lib/line-adjustments';
@@ -156,13 +157,13 @@ async function syncPlanProjects(){
   if(!cleaned){
    // Remove placeholder teams that an earlier version added to every project, unless a report already uses them.
    const used=new Set((await db().prepare("SELECT data FROM records WHERE kind = 'report' AND project_id = ?").bind(p.id).all<{data:string}>()).results.flatMap(r=>reportCrews(JSON.parse(r.data) as Report).map(c=>c.team)));
-   teams=teams.filter(t=>!(contractorNames.has(t.company.trim().toLowerCase())&&!assignedNames.has(t.company.trim().toLowerCase())&&t.hourlyRate===null&&!t.employees.some(Boolean)&&!used.has(t.code)));
+   teams=teams.filter(t=>!(contractorNames.has(t.company.trim().toLowerCase())&&!assignedNames.has(t.company.trim().toLowerCase())&&teamMembers(t).every(m=>m.hourlyRate===null)&&!teamMembers(t).some(m=>m.name)&&!used.has(t.code)));
   }
   const codes=new Set(teams.map(t=>t.code)),added:ProjectTeam[]=[];
   for(const a of mine){
-   const name=a.name.trim(),workers:[string,string]=[name,a.max>=2?name+' 2':''],t=teams.find(x=>x.planId===a.contractorId)||teams.find(x=>!x.planId&&x.company.trim().toLowerCase()===name.toLowerCase());
-   if(t){t.planId=a.contractorId;t.company=name;if(!t.employees.some(Boolean))t.employees=workers;}
-   else if(name){let n=1;while(codes.has('T'+n))n++;codes.add('T'+n);added.push({code:'T'+n,company:name,planId:a.contractorId,employees:workers,hourlyRate:null});}
+   const name=a.name.trim(),workers:TeamMember[]=[name,...(a.max>=2?[name+' 2']:[])].map(n=>({name:n,role:'fitter',hourlyRate:null})),t=teams.find(x=>x.planId===a.contractorId)||teams.find(x=>!x.planId&&x.company.trim().toLowerCase()===name.toLowerCase());
+   if(t){t.planId=a.contractorId;t.company=name;if(!teamMembers(t).some(m=>m.name))t.members=workers;}
+   else if(name){let n=1;while(codes.has('T'+n))n++;codes.add('T'+n);added.push({code:'T'+n,company:name,planId:a.contractorId,members:workers});}
   }
   const next=[...teams,...added];
   if(JSON.stringify(next)!==JSON.stringify(p.teams||[])){try{await commit(p.id,'Nachunternehmer aus Montageplanung','Montageplanung',[{kind:'project',value:{...p,teams:next,updatedAt:new Date().toISOString()} as Project}],[],added.map(t=>t.company).join(', '));}catch{/* retried on the next load */}}
@@ -176,7 +177,7 @@ function projectValues(v:Project,id:string,now:string):Project{
 
 // An unreachable planning database must not block saving; the names are then not checked.
 async function planContractors(){try{return (await readPlan()).contractors;}catch{return [];}}
-function projectTeams(input:ProjectTeam[],previous:ProjectTeam[]=[],contractors:{id:string;name:string}[]=[]):ProjectTeam[]{need(Array.isArray(input)&&input.length<=100,'Bitte höchstens 100 Teams hinterlegen.');const codes=new Set<string>();const teams:ProjectTeam[]=input.map(t=>{const code=text(t.code,80);need(code&&!codes.has(code),'Teamkürzel fehlt oder ist doppelt.');codes.add(code);const hourlyRate=t.hourlyRate===null||t.hourlyRate===undefined?null:integer(t.hourlyRate,1e8),prior=previous.find(x=>x.code===code&&x.planId);let company=prior?prior.company:text(t.company,200),planId=prior?.planId;if(!prior&&contractors.length){const key=(v:string)=>v.trim().normalize('NFKC').toLowerCase().replace(/\s+/g,' '),hit=contractors.find(c=>c.id===t.planId||key(c.name)===key(company));need(hit,'Nachunternehmer bitte aus der Montageplanung auswählen.');company=hit!.name;planId=hit!.id;}return{code,company,employees:[text(t.employees?.[0],160),text(t.employees?.[1],160)] as [string,string],hourlyRate,...(planId?{planId}:{})};});for(const prior of previous)if(prior.planId&&!codes.has(prior.code))teams.push(prior);return teams;}
+function projectTeams(input:ProjectTeam[],previous:ProjectTeam[]=[],contractors:{id:string;name:string}[]=[]):ProjectTeam[]{need(Array.isArray(input)&&input.length<=100,'Bitte höchstens 100 Teams hinterlegen.');const codes=new Set<string>();const teams:ProjectTeam[]=input.map(t=>{const code=text(t.code,80);need(code&&!codes.has(code),'Teamkürzel fehlt oder ist doppelt.');codes.add(code);const members=teamMembers(t);need(members.length<=20,'Bitte höchstens 20 Mitarbeiter je Team hinterlegen.');const cleanMembers=members.map(m=>{need(m.role==='fitter'||m.role==='foreman','Bitte Monteur oder Obermonteur auswählen.');return{name:text(m.name,160),role:m.role,hourlyRate:m.hourlyRate===null||m.hourlyRate===undefined?null:integer(m.hourlyRate,1e8)};}),prior=previous.find(x=>x.code===code&&x.planId);let company=prior?prior.company:text(t.company,200),planId=prior?.planId;if(!prior&&contractors.length){const key=(v:string)=>v.trim().normalize('NFKC').toLowerCase().replace(/\s+/g,' '),hit=contractors.find(c=>c.id===t.planId||key(c.name)===key(company));need(hit,'Nachunternehmer bitte aus der Montageplanung auswählen.');company=hit!.name;planId=hit!.id;}return{code,company,members:cleanMembers,...(planId?{planId}:{})};});for(const prior of previous)if(prior.planId&&!codes.has(prior.code))teams.push(prior);return teams;}
 
 function projectEmployees(input:ProjectEmployee[],previous:ProjectEmployee[]=[]):ProjectEmployee[]{
  need(Array.isArray(input)&&input.length<=500,'Bitte höchstens 500 Mitarbeiter hinterlegen.');const ids=new Set<string>();

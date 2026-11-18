@@ -1,4 +1,5 @@
 import type { Aggregate, Data, Line, Project, Report, ReportKind, EmployeeMember } from './types';
+import {workerRate} from './team-members';
 import {employeeTeamCode} from './employees';
 import {reportCrews,crewWorkers,measurementHoursIssues} from './report-crews';
 import {isTimeReport,lineCustomerValue,reportDays,reportKind,timeCost,timePricingComplete,timeReportBounds,timeRevenueAvailable} from './time-reports';
@@ -51,7 +52,7 @@ export function employeeTurnover(reports:Report[],fallbackFactor=.9,includeIncom
  const ranked=[...values].sort((a,b)=>b.employee-a.employee||a.employeeId.localeCompare(b.employeeId));let remaining=Math.abs(correction);while(remaining>0&&ranked.length){let changed=false;for(const member of ranked){if(correction<0&&member.employee<=0)continue;member.employee+=correction<0?-1:1;changed=true;if(--remaining===0)break;}if(!changed)break;}
  return values.sort((a,b)=>a.name.localeCompare(b.name,'de'));
 }
-export function reportCost(report:Report):number|null{if(report.crews?.length){const costs=crewReports(report).filter(r=>r.teamWork).map(reportCost);return !costs.length||costs.some(c=>c===null)?null:costs.reduce<number>((s,c)=>s+c!,0);}if(isTimeReport(report))return timeCost(report);if(measurementHoursIssues(report).length)return null;const work=report.teamWork;if(!work||typeof work.hourlyRate!=='number'||!Number.isSafeInteger(work.hourlyRate)||work.hourlyRate<0||!work.workers.length||work.workers.some(w=>typeof w.hours!=='number'||!Number.isFinite(w.hours)||w.hours<0))return null;return decimalValue(work.workers.map(w=>({customer:work.hourlyRate!,factor:w.hours!})));}
+export function reportCost(report:Report):number|null{if(report.crews?.length){const costs=crewReports(report).filter(r=>r.teamWork).map(reportCost);return !costs.length||costs.some(c=>c===null)?null:costs.reduce<number>((s,c)=>s+c!,0);}if(isTimeReport(report))return timeCost(report);if(measurementHoursIssues(report).length)return null;const work=report.teamWork;if(!work||!work.workers.length||work.workers.some(w=>{const r=workerRate(work,w);return typeof r!=='number'||!Number.isSafeInteger(r)||r<0||typeof w.hours!=='number'||!Number.isFinite(w.hours)||w.hours<0;}))return null;return decimalValue(work.workers.map(w=>({customer:workerRate(work,w)!,factor:w.hours!})));}
 export function teamResult(reports:Report[],fallbackFactor=.9){
  const value=reportTotals(reports,fallbackFactor);
  // Own employees have no internal cost rate. They must not hide the costs

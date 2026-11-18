@@ -1,4 +1,5 @@
 import type {EmployeeMember,Project,Report,ReportCrew} from './types';
+import {teamWorkers} from './team-members';
 import {employeeTeamCode} from './employees';
 import {crewPatch,equalCrewShares} from './report-crews';
 export type PlanDay={employees:string[];contractors:{name:string;count:number}[]};
@@ -11,9 +12,9 @@ export function planCrewPatch(project:Pick<Project,'employees'|'teams'>,day:Plan
  const crews:ReportCrew[]=[];
  if(members.length)crews.push({id:'plan-own',team:employeeTeamCode(members),employeeMembers:members,teamWork:null,share:0});
  for(const c of day.contractors){
-  const team=(project.teams||[]).find(t=>key(t.company)===key(c.name)),names=team?.employees.filter(Boolean)||[];
-  if(!team||!names.length||crews.some(x=>x.teamWork?.code===team.code))continue;
-  crews.push({id:'plan-'+team.code,team:team.code,employeeMembers:[],teamWork:{code:team.code,company:team.company,hourlyRate:team.hourlyRate??null,workers:names.map(name=>({name,hours:null}))},share:0});
+  const team=(project.teams||[]).find(t=>key(t.company)===key(c.name)),workers=team?teamWorkers(team).filter(w=>w.name):[];
+  if(!team||!workers.length||crews.some(x=>x.teamWork?.code===team.code))continue;
+  crews.push({id:'plan-'+team.code,team:team.code,employeeMembers:[],teamWork:{code:team.code,company:team.company,workers},share:0});
  }
  if(!crews.length)return null;
  return crews.length===1?{team:crews[0].team,teamWork:crews[0].teamWork,employeeMembers:crews[0].employeeMembers,crews:undefined}:crewPatch(equalCrewShares(crews));

@@ -37,8 +37,8 @@ export async function checkSharedEmployees({Miniflare,script,sql,headers,project
   data=await get(second.id);await saveRoster(second.id,data.employeeDirectory.employees.filter(e=>e.id!==added.id));
   const subsequent=(await post('saveProject','',{project:{...project,name:'Weitere Baustelle',number:'NEW-2',employees:[],teams:[]}})).id;
   data=await get(subsequent);assert.equal(data.employeeDirectory.employees.length,2);assert(!own(data,subsequent).employees.some(e=>e.id===added.id),'removed employees are not revived from older project records');
-  const nu={code:'T1',company:'Projektfirma',employees:['Monteur 1','Monteur 2'],hourlyRate:3500},beforeTeamToken=data.employeeDirectory.token;
-  data=await get(first.id);await post('saveProjectTeams',first.id,{teams:[nu],updatedAt:own(data,first.id).updatedAt});data=await get(second.id);assert.equal(own(data,first.id).teams[0].company,nu.company);assert.equal(own(data,second.id).teams.length,0);assert.equal(data.employeeDirectory.token,beforeTeamToken,'contractor-only edits leave the shared roster untouched');
+  const nu={code:'T1',company:'Projektfirma',members:[{name:'Monteur 1',role:'fitter',hourlyRate:3200},{name:'Monteur 2',role:'foreman',hourlyRate:4100}]},beforeTeamToken=data.employeeDirectory.token;
+  data=await get(first.id);await post('saveProjectTeams',first.id,{teams:[nu],updatedAt:own(data,first.id).updatedAt});data=await get(second.id);assert.equal(own(data,first.id).teams[0].company,nu.company);assert.deepEqual(own(data,first.id).teams[0].members,nu.members);assert.equal(own(data,second.id).teams.length,0);assert.equal(data.employeeDirectory.token,beforeTeamToken,'contractor-only edits leave the shared roster untouched');
   // Two people save different project forms based on the same shared roster.
   const attempts=[first.id,second.id].map((id,i)=>({id,employee:{id:'race-'+i,firstName:i?'Bernd':'Boris',lastName:'Sommer',code:''},teams:[{...nu,company:'Attempt '+i}]}));
   const oldTeams=new Map(data.projects.map(p=>[p.id,p.teams]));

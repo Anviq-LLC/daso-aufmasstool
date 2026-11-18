@@ -2,6 +2,7 @@ import {randomId} from './ids';
 import type {Line,Project,Report,ReportKind,RoleRates,TimeEntry,TimeRates,TimeSheet,WorkerRole} from './types';
 import {assignEmployeeCodes} from './employees';
 import {reportCrews} from './report-crews';
+import {workerRate} from './team-members';
 
 export const reportKind=(report:Pick<Report,'kind'>):ReportKind=>report.kind||'measurement';
 export const isTimeReport=(report:Pick<Report,'kind'>)=>reportKind(report)!=='measurement';
@@ -35,10 +36,10 @@ export function workMinutes(entry:Pick<TimeEntry,'start'|'end'|'pauseMinutes'>):
  return end-start-entry.pauseMinutes;
 }
 export function billedMinutes(entry:Pick<TimeEntry,'start'|'end'|'pauseMinutes'|'interruptionMinutes'>):number|null{const work=workMinutes(entry),cut=entry.interruptionMinutes||0;return work===null||cut>work?null:work-cut;}
-export type TimeWorker={id:string;name:string;code:string;trial:boolean;contractorRate:number|null|undefined};
+export type TimeWorker={id:string;name:string;code:string;trial:boolean;contractorRate:number|null|undefined;role?:WorkerRole};
 export function timeWorkers(report:Report):TimeWorker[]{
  if(report.crews?.length)return reportCrews(report).flatMap(crew=>timeWorkers({...report,crews:undefined,team:crew.team,teamWork:crew.teamWork,employeeMembers:crew.employeeMembers}));
- if(report.teamWork){const codes=assignEmployeeCodes(report.teamWork.workers.map((worker,index)=>{const parts=worker.name.trim().split(/\s+/);return{id:`sub:${report.teamWork!.code}:${index}`,firstName:parts[0]||'Mitarbeiter',lastName:parts.slice(1).join(' ')||parts[0]||'Sub',code:''};}));return codes.map((worker,index)=>({id:worker.id,name:report.teamWork!.workers[index].name,code:worker.code,trial:false,contractorRate:report.teamWork!.hourlyRate}));}
+ if(report.teamWork){const codes=assignEmployeeCodes(report.teamWork.workers.map((worker,index)=>{const parts=worker.name.trim().split(/\s+/);return{id:`sub:${report.teamWork!.code}:${index}`,firstName:parts[0]||'Mitarbeiter',lastName:parts.slice(1).join(' ')||parts[0]||'Sub',code:''};}));return codes.map((worker,index)=>({id:worker.id,name:report.teamWork!.workers[index].name,code:worker.code,trial:false,contractorRate:workerRate(report.teamWork!,report.teamWork!.workers[index]),role:report.teamWork!.workers[index].role}));}
  return (report.employeeMembers||[]).map(m=>({id:m.employeeId,name:m.name,code:m.code,trial:m.trial,contractorRate:undefined}));
 }
 export function entryRates(project:Project,worker:TimeWorker,role:WorkerRole):RoleRates{return{...projectTimeRates(project)[role],costHourly:worker.contractorRate??null,allowanceCost:0,...(worker.contractorRate===undefined?{allowanceCost:0,travelCost:0,overnightCost:0}:{})};}
@@ -61,7 +62,7 @@ export function editTimeEntry(entry:TimeEntry,patch:Partial<TimeEntry>,project:P
 }
 
 export function copyTimeEntry(source:TimeEntry,target:TimeEntry,project:Project,worker:TimeWorker):TimeEntry{return editTimeEntry(target,{role:source.role,start:source.start,end:source.end,pauseMinutes:source.pauseMinutes,interruptionMinutes:0,interruptionNote:'',task:source.task,allowanceQuantity:allowanceCount(source),travelQuantity:0,overnightQuantity:0},project,worker);}
-export function newTimeEntry(project:Project,report:Report,date:string,worker:TimeWorker):TimeEntry{return{id:randomId(),date,workerId:worker.id,name:worker.name,code:worker.code,role:'fitter',start:'',end:'',pauseMinutes:0,task:'',allowanceQuantity:report.parentReportId?0:1,travelQuantity:0,overnightQuantity:0,rates:entryRates(project,worker,'fitter')};}
+export function newTimeEntry(project:Project,report:Report,date:string,worker:TimeWorker):TimeEntry{return{id:randomId(),date,workerId:worker.id,name:worker.name,code:worker.code,role:worker.role||'fitter',start:'',end:'',pauseMinutes:0,task:'',allowanceQuantity:report.parentReportId?0:1,travelQuantity:0,overnightQuantity:0,rates:entryRates(project,worker,worker.role||'fitter')};}
 export function timeReadiness(report:Report):string[]{
  const entries=report.timeSheet?.entries||[],issues:string[]=[];
  if(!entries.length)issues.push('Bitte mindestens einen Arbeitstag mit Mitarbeiter erfassen.');

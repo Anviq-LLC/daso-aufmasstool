@@ -1,10 +1,12 @@
-export type ProjectTeam = {planId?:string;code:string;company:string;employees:[string,string];hourlyRate?:number|null};
+export type TeamMember = {name:string;role:WorkerRole;hourlyRate:number|null};
+// employees and hourlyRate are the legacy two-slot shape, read through teamMembers().
+export type ProjectTeam = {planId?:string;code:string;company:string;members?:TeamMember[];employees?:[string,string];hourlyRate?:number|null};
 export type ProjectEmployee = {planId?:string;inactive?:boolean;id:string;firstName:string;lastName:string;code:string;legacyIds?:string[]};
 export type ProjectContact = {id:string;name:string;role:string;phone:string;email:string;legacyText?:string};
 export type EmployeeDirectory = {id:string;employees:ProjectEmployee[];token:string;updatedAt:string};
 export type CompanyProfile = {id:string;name:string;street:string;postalCode:string;city:string;country:string;phone:string;email:string;website:string;taxNumber:string;vatId:string;registerCourt:string;registerNumber:string;managingDirector:string;bankName:string;iban:string;bic:string;token:string;updatedAt:string};
 export type EmployeeMember = {employeeId:string;name:string;code:string;trial:boolean};
-export type TeamWork = {code:string;company:string;hourlyRate:number|null;workers:{name:string;hours:number|null;dailyHours?:Record<string,number>}[]};
+export type TeamWork = {code:string;company:string;hourlyRate?:number|null;workers:{name:string;role?:WorkerRole;hourlyRate?:number|null;hours:number|null;dailyHours?:Record<string,number>}[]};
 export type ReportCrew = {id:string;team:string;employeeMembers:EmployeeMember[];teamWork:TeamWork|null;share:number};
 export type ReportKind = 'measurement'|'extra'|'timesheet';
 export type WorkerRole = 'fitter'|'foreman';
